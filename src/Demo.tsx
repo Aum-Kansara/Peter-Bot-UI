@@ -1,9 +1,9 @@
 import 'react-calendar/dist/Calendar.css';
-
 import { Chat, ChatWindow, Launcher, RuntimeAPIProvider, SessionStatus, SystemResponse, TurnType, UserResponse } from '@voiceflow/react-chat';
-import { useContext, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { match } from 'ts-pattern';
-
+import React from 'react'
+import {InlineWidget} from 'react-calendly'
 import { LiveAgentStatus } from './components/LiveAgentStatus.component';
 import { StreamedMessage } from './components/StreamedMessage.component';
 import { RuntimeContext } from './context';
@@ -13,8 +13,20 @@ import { VideoMessage } from './messages/VideoMessage.component';
 import { DemoContainer } from './styled';
 import { useLiveAgent } from './use-live-agent.hook';
 
+
 const IMAGE = 'https://picsum.photos/seed/1/200/300';
 const AVATAR = 'https://picsum.photos/seed/1/80/80';
+const CALENDLY_WIDGET='calendly_widget'
+
+
+const Calendly_Widget: React.FC<{url:any}> = ({url})=>{
+  return (
+      <div>
+      <InlineWidget url={url} styles={{height: '300px',padding:'5px'}}/>
+      </div>
+    );
+};
+
 
 export const Demo: React.FC = () => {
   const [open, setOpen] = useState(false);
@@ -22,10 +34,32 @@ export const Demo: React.FC = () => {
   const { runtime } = useContext(RuntimeContext)!;
   const liveAgent = useLiveAgent();
 
+  useEffect(()=>{
+    runtime.register({
+      canHandle:({type})=>type==='schedule_meeting',
+      handle:({context},trace)=>{
+        context.messages.push({type:CALENDLY_WIDGET,payload:JSON.parse(trace.payload)['url']} as any);
+        return context;
+      },
+    });
+  },[]);
+
+  useEffect(()=>{
+    runtime.register({
+      canHandle:({type})=>type==='get_user_name',
+      handle:({context},trace)=>{
+        var user_name=localStorage.getItem("user_name")?.trim();
+        if(user_name) context.messages.push({type:'text',text:`Hello ${user_name}, we appreciate you taking the time to submit the form. ` as any});
+        return context;
+      }
+    })
+  })
+
   const handleLaunch = async () => {
     setOpen(true);
     await runtime.launch();
   };
+
 
   const handleEnd = () => {
     runtime.setStatus(SessionStatus.ENDED);
@@ -59,8 +93,8 @@ export const Demo: React.FC = () => {
       <ChatWindow.Container>
         <RuntimeAPIProvider {...runtime}>
           <Chat
-            title="My Assistant"
-            description="welcome to my assistant"
+            title="TRA Tax-Helper AI"
+            description="Welcome to TRA Tax-Helper AI"
             image={IMAGE}
             avatar={AVATAR}
             withWatermark
@@ -88,6 +122,7 @@ export const Demo: React.FC = () => {
                         .with({ type: CustomMessage.VIDEO }, ({ payload: url }) => <VideoMessage url={url} />)
                         .with({ type: CustomMessage.STREAMED_RESPONSE }, ({ payload: { getSocket } }) => <StreamedMessage getSocket={getSocket} />)
                         .with({ type: CustomMessage.PLUGIN }, ({ payload: { Message } }) => <Message />)
+                        .with({type:CALENDLY_WIDGET as any},(payload)=>{ return <Calendly_Widget url={payload["payload" as any]} />})
                         .otherwise(() => <SystemResponse.SystemMessage {...props} message={message} />)
                     }
                     avatar={AVATAR}
